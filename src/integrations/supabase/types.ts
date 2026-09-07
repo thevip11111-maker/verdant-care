@@ -14,7 +14,181 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      diagnoses: {
+        Row: {
+          certainty: number
+          created_at: string
+          disease_name: string
+          id: string
+          image_url: string | null
+          plant_id: string | null
+          recommendations: Json
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          certainty: number
+          created_at?: string
+          disease_name: string
+          id?: string
+          image_url?: string | null
+          plant_id?: string | null
+          recommendations?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          certainty?: number
+          created_at?: string
+          disease_name?: string
+          id?: string
+          image_url?: string | null
+          plant_id?: string | null
+          recommendations?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diagnoses_plant_id_fkey"
+            columns: ["plant_id"]
+            isOneToOne: false
+            referencedRelation: "plants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plants: {
+        Row: {
+          care_notes: string | null
+          created_at: string
+          health_status: string
+          humidity: string | null
+          id: string
+          image_url: string | null
+          location: string | null
+          name: string
+          soil: string | null
+          sunlight: string | null
+          updated_at: string
+          user_id: string
+          variety: string | null
+          watering_advice: string | null
+        }
+        Insert: {
+          care_notes?: string | null
+          created_at?: string
+          health_status?: string
+          humidity?: string | null
+          id?: string
+          image_url?: string | null
+          location?: string | null
+          name: string
+          soil?: string | null
+          sunlight?: string | null
+          updated_at?: string
+          user_id: string
+          variety?: string | null
+          watering_advice?: string | null
+        }
+        Update: {
+          care_notes?: string | null
+          created_at?: string
+          health_status?: string
+          humidity?: string | null
+          id?: string
+          image_url?: string | null
+          location?: string | null
+          name?: string
+          soil?: string | null
+          sunlight?: string | null
+          updated_at?: string
+          user_id?: string
+          variety?: string | null
+          watering_advice?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string
+          id: string
+          reminder_time: string
+          reminders_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          id: string
+          reminder_time?: string
+          reminders_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          reminder_time?: string
+          reminders_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      watering_schedules: {
+        Row: {
+          amount_ml: number | null
+          created_at: string
+          frequency_days: number
+          id: string
+          last_completed_at: string | null
+          next_watering_at: string
+          plant_id: string
+          reminders_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_ml?: number | null
+          created_at?: string
+          frequency_days?: number
+          id?: string
+          last_completed_at?: string | null
+          next_watering_at: string
+          plant_id: string
+          reminders_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_ml?: number | null
+          created_at?: string
+          frequency_days?: number
+          id?: string
+          last_completed_at?: string | null
+          next_watering_at?: string
+          plant_id?: string
+          reminders_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watering_schedules_plant_id_fkey"
+            columns: ["plant_id"]
+            isOneToOne: true
+            referencedRelation: "plants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
