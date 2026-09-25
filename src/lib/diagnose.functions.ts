@@ -17,7 +17,7 @@ If the image is not a plant, set plant "Unknown", condition "No plant detected",
 export const diagnoseLeaf = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ image: z.string().startsWith("data:image/").max(8_000_000) }).parse(d))
   .handler(async ({ data }): Promise<{ ok: true; result: Diagnosis } | { ok: false; error: string }> => {
-    const key = process.env.LOVABLE_API_KEY;
+    const key = process.env['LOVABLE_API_KEY'];
     if (!key) return { ok: false, error: "AI is not configured." };
     const res = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
       method: "POST",

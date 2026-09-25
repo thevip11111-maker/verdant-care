@@ -98,7 +98,7 @@ export function WeatherCard() {
     if (wx.uv >= 6) a.push({ icon: Sun, text: `High UV (${Math.round(wx.uv)}) — move tender plants into shade during midday.`, tone: "warn" });
     if (wx.humidity > 80) a.push({ icon: Wind, text: "Very humid — improve airflow to prevent fungal spots.", tone: "warn" });
     if (wx.temp <= 5) a.push({ icon: Thermometer, text: "Cold snap — bring tropical plants indoors tonight.", tone: "warn" });
-    if (wx.days[0]?.rain >= 60) a.push({ icon: CloudSun, text: "Rain expected tomorrow — skip watering outdoor beds.", tone: "ok" });
+    if ((wx.days[0]?.rain ?? 0) >= 60) a.push({ icon: CloudSun, text: "Rain expected tomorrow — skip watering outdoor beds.", tone: "ok" });
     if (!a.length) a.push({ icon: Leaf, text: "Mild conditions — a great day for repotting or pruning.", tone: "ok" });
     return a;
   }, [wx]);
