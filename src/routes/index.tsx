@@ -11,6 +11,7 @@ import snakePlant from "@/assets/snake-plant.jpg";
 import lesion from "@/assets/leaf-spot.jpg";
 import avatar from "@/assets/gardener-avatar.jpg";
 import { ScannerView, WeatherCard, CareHub } from "@/components/verdant-features";
+import { useAvatar } from "@/hooks/use-avatar";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -41,6 +42,7 @@ function VerdantApp() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [completed, setCompleted] = useState<string[]>([]);
+  const { url: avatarUrl, upload: uploadAvatar, uploading: avatarUploading, error: avatarError } = useAvatar(signedIn === true);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSignedIn(Boolean(data.user)));
@@ -74,12 +76,12 @@ function VerdantApp() {
   if (signedIn === null) return <div className="grid min-h-screen place-items-center bg-surface"><LoaderCircle className="animate-spin text-brand" /></div>;
   if (!signedIn && !demo) return <AuthScreen mode={mode} setMode={setMode} message={message} busy={busy} onSubmit={handleAuth} onDemo={() => setDemo(true)} />;
 
-  return <AppShell view={view} setView={setView} onSignOut={async () => { if (demo) { setDemo(false); return; } await supabase.auth.signOut(); }}>
+  return <AppShell view={view} setView={setView} avatarUrl={avatarUrl} onSignOut={async () => { if (demo) { setDemo(false); return; } await supabase.auth.signOut(); }}>
     {view === "home" && <HomeView setView={setView} completed={completed} setCompleted={setCompleted} />}
     {view === "plants" && <CareHub plants={plants} />}
     {view === "scan" && <ScannerView />}
     {view === "water" && <WaterView completed={completed} setCompleted={setCompleted} />}
-    {view === "profile" && <ProfileView demo={demo} />}
+    {view === "profile" && <ProfileView demo={demo} avatarUrl={avatarUrl} onUpload={uploadAvatar} uploading={avatarUploading} uploadError={avatarError} />}
   </AppShell>;
 }
 
@@ -105,10 +107,10 @@ function AuthScreen({ mode, setMode, message, busy, onSubmit, onDemo }: { mode: 
   </div></main>;
 }
 
-function AppShell({ children, view, setView, onSignOut }: { children: React.ReactNode; view: View; setView: (v: View) => void; onSignOut: () => void }) {
+function AppShell({ children, view, setView, onSignOut, avatarUrl }: { children: React.ReactNode; view: View; setView: (v: View) => void; onSignOut: () => void; avatarUrl?: string | undefined }) {
   const nav = [{id:"home" as View, label:"Home", icon:Home},{id:"plants" as View,label:"Plants",icon:Leaf},{id:"scan" as View,label:"Scan",icon:ScanLine},{id:"water" as View,label:"Water",icon:Droplets},{id:"profile" as View,label:"You",icon:UserRound}];
   return <div className="min-h-screen bg-surface text-brand"><div className="mx-auto max-w-[460px] px-5 pb-28 pt-6">
-    <header className="flex items-center justify-between"><button onClick={() => setView("home")} className="text-left"><p className="font-display text-[11px] font-semibold uppercase tracking-[0.28em] text-brand/50">Verdant</p><p className="font-display text-[22px] font-extrabold leading-none">Grow Diagnostics</p></button><button onClick={() => setView("profile")} className="relative"><img src={avatar} alt="Your profile" width={512} height={512} className="size-10 rounded-full object-cover ring-1 ring-brand/10"/><span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-moss ring-2 ring-surface"/></button></header>
+    <header className="flex items-center justify-between"><button onClick={() => setView("home")} className="text-left"><p className="font-display text-[11px] font-semibold uppercase tracking-[0.28em] text-brand/50">Verdant</p><p className="font-display text-[22px] font-extrabold leading-none">Grow Diagnostics</p></button><button onClick={() => setView("profile")} className="relative"><img src={avatarUrl ?? avatar} alt="Your profile" width={512} height={512} className="size-10 rounded-full object-cover ring-1 ring-brand/10"/><span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-moss ring-2 ring-surface"/></button></header>
     <div className="mt-5">{children}</div>
     <button onClick={onSignOut} className="mt-8 flex items-center gap-2 text-xs font-semibold text-brand/50"><LogOut size={14}/> Sign out</button>
   </div><nav className="fixed inset-x-0 bottom-0 z-20"><div className="mx-auto flex max-w-[460px] items-center justify-between border-t border-brand/10 bg-background/95 px-5 pb-5 pt-3 shadow-sm">{nav.map(({id,label,icon:Icon}) => <button key={id} onClick={() => setView(id)} aria-label={label} className={`flex min-w-12 flex-col items-center gap-1 text-[10px] font-semibold ${view === id ? "text-brand" : "text-brand/40"}`}><span className={`grid place-items-center ${id === "scan" ? "-mt-6 size-12 rounded-full bg-brand text-brand-foreground shadow-md" : `size-8 rounded-xl ${view === id ? "bg-brand text-brand-foreground" : "bg-moss/20"}`}`}><Icon size={id === "scan" ? 20 : 16}/></span>{label}</button>)}</div></nav></div>;
@@ -129,4 +131,19 @@ function DiagnosisCard() { return <section className="mt-6"><h2 className="font-
 
 function WaterView({completed,setCompleted}:{completed:string[];setCompleted:(v:string[])=>void}) { const tasks: Array<[string, string, string]> = [["Monstera","Today · 8:00 AM","80 ml"],["Pothos","Today · 6:00 PM","120 ml"],["Ficus","Jun 18 · 8:00 AM","100 ml"]]; return <><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand/50">Care schedule</p><h1 className="font-display text-3xl font-extrabold">Watering</h1></div><div className="mt-5 rounded-[28px] bg-brand p-6 text-brand-foreground"><Droplets size={24} className="text-moss"/><p className="mt-3 font-display text-4xl font-black">2 due</p><p className="mt-1 text-sm text-brand-foreground/65">Your next care window starts at 6:00 PM.</p></div><div className="mt-5 space-y-3">{tasks.map(([name,time,amount])=><div key={name} className="rounded-xl border border-border bg-card p-4"><div className="flex items-center justify-between"><div><h2 className="font-display font-bold">{name}</h2><p className="text-xs text-muted-foreground">{time} · {amount}</p></div><Button size="sm" variant={completed.includes(name)?"secondary":"default"} onClick={()=>setCompleted(completed.includes(name)?completed.filter(x=>x!==name):[...completed,name])}>{completed.includes(name)?"Completed":"Mark done"}</Button></div></div>)}</div><div className="mt-5 rounded-xl border border-border bg-card p-4"><div className="flex items-center justify-between"><div><p className="font-display font-bold">Reminder notifications</p><p className="text-xs text-muted-foreground">Daily care digest at 8:00 AM</p></div><span className="flex h-6 w-11 items-center justify-end rounded-full bg-brand p-0.5"><span className="size-5 rounded-full bg-background"/></span></div></div></>; }
 
-function ProfileView({demo}:{demo:boolean}) { return <><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand/50">Account</p><h1 className="font-display text-3xl font-extrabold">Your profile</h1></div><div className="mt-5 flex items-center gap-4 rounded-xl border border-border bg-card p-4"><img src={avatar} alt="Profile" width={512} height={512} className="size-16 rounded-full object-cover"/><div><h2 className="font-display text-lg font-bold">{demo?"Elena Voss":"Plant keeper"}</h2><p className="text-sm text-muted-foreground">12 plants · 9.1 health score</p></div></div><div className="mt-4 rounded-xl border border-border bg-card divide-y divide-border">{["Care preferences","Notification schedule","Privacy & security"].map(x=><button key={x} className="flex w-full items-center justify-between p-4 text-sm font-semibold">{x}<ChevronRight size={16}/></button>)}</div></>; }
+function ProfileView({demo, avatarUrl, onUpload, uploading, uploadError}:{demo:boolean; avatarUrl?:string | undefined; onUpload:(f:File)=>void; uploading:boolean; uploadError:string}) {
+  const picker = useRef<HTMLInputElement>(null);
+  return <><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand/50">Account</p><h1 className="font-display text-3xl font-extrabold">Your profile</h1></div>
+  <div className="mt-5 flex items-center gap-4 rounded-xl border border-border bg-card p-4">
+    <div className="relative shrink-0">
+      <img src={avatarUrl ?? avatar} alt="Profile" width={512} height={512} className="size-16 rounded-full object-cover ring-1 ring-brand/10"/>
+      {uploading && <span className="absolute inset-0 grid place-items-center rounded-full bg-brand/60 text-brand-foreground"><LoaderCircle className="animate-spin" size={18}/></span>}
+      <button type="button" aria-label="Change profile picture" disabled={uploading || demo} onClick={() => picker.current?.click()} className="absolute -bottom-1 -right-1 grid size-7 place-items-center rounded-full bg-brand text-brand-foreground shadow-md ring-2 ring-card disabled:opacity-60"><Camera size={13}/></button>
+      <input ref={picker} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onUpload(f); }}/>
+    </div>
+    <div><h2 className="font-display text-lg font-bold">{demo?"Elena Voss":"Plant keeper"}</h2><p className="text-sm text-muted-foreground">12 plants · 9.1 health score</p><button type="button" disabled={uploading || demo} onClick={() => picker.current?.click()} className="mt-1 text-xs font-semibold text-brand/60 disabled:opacity-60">{uploading ? "Uploading…" : "Change picture"}</button></div>
+  </div>
+  {demo && <p className="mt-2 text-xs text-muted-foreground">Sign in to save your own picture.</p>}
+  {uploadError && <p className="mt-2 rounded-xl bg-secondary p-3 text-sm" role="status">{uploadError}</p>}
+  <div className="mt-4 rounded-xl border border-border bg-card divide-y divide-border">{["Care preferences","Notification schedule","Privacy & security"].map(x=><button key={x} className="flex w-full items-center justify-between p-4 text-sm font-semibold">{x}<ChevronRight size={16}/></button>)}</div></>;
+}
