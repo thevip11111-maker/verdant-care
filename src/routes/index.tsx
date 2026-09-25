@@ -107,7 +107,7 @@ function AuthScreen({ mode, setMode, message, busy, onSubmit, onDemo }: { mode: 
   </div></main>;
 }
 
-function AppShell({ children, view, setView, onSignOut }: { children: React.ReactNode; view: View; setView: (v: View) => void; onSignOut: () => void }) {
+function AppShell({ children, view, setView, onSignOut, avatarUrl }: { children: React.ReactNode; view: View; setView: (v: View) => void; onSignOut: () => void; avatarUrl?: string }) {
   const nav = [{id:"home" as View, label:"Home", icon:Home},{id:"plants" as View,label:"Plants",icon:Leaf},{id:"scan" as View,label:"Scan",icon:ScanLine},{id:"water" as View,label:"Water",icon:Droplets},{id:"profile" as View,label:"You",icon:UserRound}];
   return <div className="min-h-screen bg-surface text-brand"><div className="mx-auto max-w-[460px] px-5 pb-28 pt-6">
     <header className="flex items-center justify-between"><button onClick={() => setView("home")} className="text-left"><p className="font-display text-[11px] font-semibold uppercase tracking-[0.28em] text-brand/50">Verdant</p><p className="font-display text-[22px] font-extrabold leading-none">Grow Diagnostics</p></button><button onClick={() => setView("profile")} className="relative"><img src={avatar} alt="Your profile" width={512} height={512} className="size-10 rounded-full object-cover ring-1 ring-brand/10"/><span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-moss ring-2 ring-surface"/></button></header>
