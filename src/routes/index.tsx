@@ -42,6 +42,7 @@ function VerdantApp() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [completed, setCompleted] = useState<string[]>([]);
+  const { url: avatarUrl, upload: uploadAvatar, uploading: avatarUploading, error: avatarError } = useAvatar(signedIn === true);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSignedIn(Boolean(data.user)));
