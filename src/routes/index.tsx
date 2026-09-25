@@ -11,6 +11,7 @@ import snakePlant from "@/assets/snake-plant.jpg";
 import lesion from "@/assets/leaf-spot.jpg";
 import avatar from "@/assets/gardener-avatar.jpg";
 import { ScannerView, WeatherCard, CareHub } from "@/components/verdant-features";
+import { useAvatar } from "@/hooks/use-avatar";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
