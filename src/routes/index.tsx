@@ -76,12 +76,12 @@ function VerdantApp() {
   if (signedIn === null) return <div className="grid min-h-screen place-items-center bg-surface"><LoaderCircle className="animate-spin text-brand" /></div>;
   if (!signedIn && !demo) return <AuthScreen mode={mode} setMode={setMode} message={message} busy={busy} onSubmit={handleAuth} onDemo={() => setDemo(true)} />;
 
-  return <AppShell view={view} setView={setView} onSignOut={async () => { if (demo) { setDemo(false); return; } await supabase.auth.signOut(); }}>
+  return <AppShell view={view} setView={setView} avatarUrl={avatarUrl} onSignOut={async () => { if (demo) { setDemo(false); return; } await supabase.auth.signOut(); }}>
     {view === "home" && <HomeView setView={setView} completed={completed} setCompleted={setCompleted} />}
     {view === "plants" && <CareHub plants={plants} />}
     {view === "scan" && <ScannerView />}
     {view === "water" && <WaterView completed={completed} setCompleted={setCompleted} />}
-    {view === "profile" && <ProfileView demo={demo} />}
+    {view === "profile" && <ProfileView demo={demo} avatarUrl={avatarUrl} onUpload={uploadAvatar} uploading={avatarUploading} uploadError={avatarError} />}
   </AppShell>;
 }
 
