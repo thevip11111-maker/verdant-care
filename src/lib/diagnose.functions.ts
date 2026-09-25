@@ -56,7 +56,7 @@ export const diagnoseLeaf = createServerFn({ method: "POST" })
       const r = JSON.parse(m[0]);
       return { ok: true, result: {
         plant: String(r.plant ?? "Unknown"), condition: String(r.condition ?? "Unknown"), healthy: Boolean(r.healthy),
-        confidence: Math.max(0, Math.min(100, Math.round(Number(r.confidence) || 0))),
+        confidence: Math.max(0, Math.min(100, Math.round((Number(r.confidence) || 0) <= 1 ? (Number(r.confidence) || 0) * 100 : Number(r.confidence)))),
         symptoms: (Array.isArray(r.symptoms) ? r.symptoms : []).map(String).slice(0, 6),
         treatment: (Array.isArray(r.treatment) ? r.treatment : []).map(String).slice(0, 8),
       } };
