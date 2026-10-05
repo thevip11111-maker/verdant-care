@@ -277,7 +277,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      verify_reminder_cron_token: { Args: { _token: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
