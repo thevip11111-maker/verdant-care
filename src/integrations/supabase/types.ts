@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      care_reminders: {
+        Row: {
+          amount_ml: number | null
+          created_at: string
+          enabled: boolean
+          frequency_days: number
+          id: string
+          kind: string
+          last_completed_at: string | null
+          last_notified_at: string | null
+          next_due_at: string
+          plant_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_ml?: number | null
+          created_at?: string
+          enabled?: boolean
+          frequency_days?: number
+          id?: string
+          kind?: string
+          last_completed_at?: string | null
+          last_notified_at?: string | null
+          next_due_at: string
+          plant_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_ml?: number | null
+          created_at?: string
+          enabled?: boolean
+          frequency_days?: number
+          id?: string
+          kind?: string
+          last_completed_at?: string | null
+          last_notified_at?: string | null
+          next_due_at?: string
+          plant_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_reminders_plant_id_fkey"
+            columns: ["plant_id"]
+            isOneToOne: false
+            referencedRelation: "plants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diagnoses: {
         Row: {
           certainty: number
@@ -142,6 +198,33 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       watering_schedules: {
         Row: {
           amount_ml: number | null
@@ -194,7 +277,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      verify_reminder_cron_token: { Args: { _token: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
