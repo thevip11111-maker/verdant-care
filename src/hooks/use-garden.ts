@@ -140,9 +140,7 @@ export function useGarden(mode: "live" | "demo" | "off") {
 
   const completeReminder = async (r: Reminder) => {
     const now = Date.now();
-    const next = iso(Math.max(new Date(r.next_due_at).getTime(), now - r.frequency_days * DAY) + r.frequency_days * DAY > now
-      ? Math.max(new Date(r.next_due_at).getTime(), now) + r.frequency_days * DAY - (new Date(r.next_due_at).getTime() > now ? 0 : 0)
-      : now + r.frequency_days * DAY);
+    const next = iso(Math.max(new Date(r.next_due_at).getTime(), now) + r.frequency_days * DAY);
     const patch = { last_completed_at: iso(now), next_due_at: next, last_notified_at: null };
     if (mode === "demo") { setReminders(reminders.map((x) => (x.id === r.id ? { ...x, ...patch } : x))); return; }
     await supabase.from("care_reminders").update(patch).eq("id", r.id);
