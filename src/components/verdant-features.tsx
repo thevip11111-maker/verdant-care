@@ -4,6 +4,32 @@ import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { diagnoseLeaf, type Diagnosis } from "@/lib/diagnose.functions";
+import { supabase } from "@/integrations/supabase/client";
+
+type HistoryItem = { id: string; created_at: string; image?: string | undefined; r: Diagnosis };
+
+async function dataUrlToBlob(u: string) { return (await fetch(u)).blob(); }
+
+async function saveScan(image: string, r: Diagnosis) {
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return;
+  const path = `${auth.user.id}/scans/${crypto.randomUUID()}.jpg`;
+  const up = await supabase.storage.from("plant-photos").upload(path, await dataUrlToBlob(image), { contentType: "image/jpeg" });
+  await supabase.from("diagnoses").insert({ user_id: auth.user.id, image_url: up.error ? null : path, disease_name: r.condition, certainty: Math.round(r.confidence), status: r.healthy ? "healthy" : "needs_care", recommendations: { plant: r.plant, healthy: r.healthy, symptoms: r.symptoms, treatment: r.treatment } });
+}
+
+async function loadHistory(): Promise<HistoryItem[]> {
+  const { data } = await supabase.from("diagnoses").select("id, created_at, image_url, disease_name, certainty, status, recommendations").order("created_at", { ascending: false }).limit(30);
+  if (!data?.length) return [];
+  const paths = data.map(d => d.image_url).filter((x): x is string => !!x);
+  const signed = paths.length ? (await supabase.storage.from("plant-photos").createSignedUrls(paths, 3600)).data ?? [] : [];
+  const urls = new Map(signed.map(s => [s.path, s.signedUrl]));
+  return data.map(d => {
+    const rec = (d.recommendations ?? {}) as Partial<Diagnosis>;
+    return { id: d.id, created_at: d.created_at, image: d.image_url ? urls.get(d.image_url) ?? undefined : undefined,
+      r: { plant: rec.plant ?? "Plant", condition: d.disease_name, healthy: rec.healthy ?? d.status === "healthy", confidence: d.certainty, symptoms: Array.isArray(rec.symptoms) ? rec.symptoms : [], treatment: Array.isArray(rec.treatment) ? rec.treatment : (Array.isArray(d.recommendations) ? d.recommendations as string[] : []) } };
+  });
+}
 
 /* ---------------- Scanner ---------------- */
 function fileToDataUrl(file: File): Promise<string> {
@@ -29,6 +55,10 @@ export function ScannerView() {
   const [state, setState] = useState<"idle" | "analyzing" | "result" | "error">("idle");
   const [result, setResult] = useState<Diagnosis>();
   const [error, setError] = useState("");
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [signedIn, setSignedIn] = useState(false);
+  const [openId, setOpenId] = useState<string>();
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => { setSignedIn(!!data.user); if (data.user) loadHistory().then(setHistory); }); }, []);
 
   async function choose(file?: File) {
     if (!file) return;
@@ -36,7 +66,7 @@ export function ScannerView() {
       const url = await fileToDataUrl(file);
       setImage(url); setState("analyzing"); setResult(undefined);
       const r = await analyze({ data: { image: url } });
-      if (r.ok) { setResult(r.result); setState("result"); } else { setError(r.error); setState("error"); }
+      if (r.ok) { setResult(r.result); setState("result"); if (signedIn) { saveScan(url, r.result).then(loadHistory).then(setHistory).catch(() => {}); } } else { setError(r.error); setState("error"); }
     } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong."); setState("error"); }
   }
 
@@ -54,6 +84,22 @@ export function ScannerView() {
     <div className="mt-3 grid grid-cols-2 gap-3"><Button disabled={state === "analyzing"} onClick={() => cam.current?.click()}><Camera /> Take photo</Button><Button disabled={state === "analyzing"} variant="outline" onClick={() => up.current?.click()}><Upload /> Upload</Button></div>
     {state === "error" && <div role="alert" className="mt-5 flex gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm"><AlertTriangle size={18} className="shrink-0 text-destructive" />{error}</div>}
     {state === "result" && result && <DiagnosisResult r={result} onReset={() => { setImage(undefined); setState("idle"); }} />}
+    <section className="mt-8"><h2 className="font-display text-xl font-extrabold">Scan history</h2>
+      {!signedIn ? <p className="mt-2 text-sm text-muted-foreground">Sign in to keep a history of your scans.</p>
+      : !history.length ? <p className="mt-2 text-sm text-muted-foreground">Your past diagnoses and treatment plans will appear here.</p>
+      : <div className="mt-3 space-y-2.5">{history.map(h => <article key={h.id} className="overflow-hidden rounded-2xl border border-border bg-card">
+          <button className="flex w-full items-center gap-3 p-3 text-left" onClick={() => setOpenId(openId === h.id ? undefined : h.id)} aria-expanded={openId === h.id}>
+            {h.image ? <img src={h.image} alt={h.r.condition} loading="lazy" className="size-14 shrink-0 rounded-xl object-cover" /> : <span className="grid size-14 shrink-0 place-items-center rounded-xl bg-moss/20"><Leaf size={18} /></span>}
+            <div className="min-w-0 flex-1"><p className="truncate font-display text-sm font-bold">{h.r.condition}</p><p className="truncate text-xs text-brand/50">{h.r.plant} · {h.r.confidence}% · {new Date(h.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p></div>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${h.r.healthy ? "bg-moss/30" : "bg-warning/15 text-warning"}`}>{h.r.healthy ? "Healthy" : "Needs care"}</span>
+          </button>
+          {openId === h.id && <div className="border-t border-border p-4">
+            {h.r.symptoms.length > 0 && <ul className="mb-3 flex flex-wrap gap-1.5">{h.r.symptoms.map(s => <li key={s} className="rounded-full bg-secondary px-2.5 py-1 text-[11px]">{s}</li>)}</ul>}
+            <ol className="space-y-2 text-sm">{h.r.treatment.map((x, i) => <li key={x} className="flex gap-2.5"><span className="grid size-5 shrink-0 place-items-center rounded-full bg-moss/30 text-[11px] font-bold">{i + 1}</span>{x}</li>)}</ol>
+            <button className="mt-3 text-xs font-semibold text-destructive" onClick={async () => { await supabase.from("diagnoses").delete().eq("id", h.id); setHistory(history.filter(x => x.id !== h.id)); }}>Delete from history</button>
+          </div>}
+        </article>)}</div>}
+    </section>
   </>;
 }
 
