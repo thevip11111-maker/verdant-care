@@ -116,7 +116,6 @@ export function WeatherCard() {
 }
 
 /* ---------------- Care hub ---------------- */
-type Profile = { name: string; image: string; status: string; water: string; light: string; soil: string; humidity: string };
 const tips = [
   { cat: "Care", title: "Water by soil, not schedule", body: "Push a finger 2–3 cm into the soil. Water only when it feels dry at that depth." },
   { cat: "Care", title: "Rotate for even growth", body: "Turn pots a quarter turn weekly so every side gets light." },
@@ -130,20 +129,13 @@ const tips = [
   { cat: "Seasonal", title: "Winter: water less", body: "Growth slows — reduce watering by about half and stop fertilizing." },
 ];
 
-export function CareHub({ plants }: { plants: Profile[] }) {
+export function TipsHub() {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("All");
   const shown = tips.filter(t => (cat === "All" || t.cat === cat) && `${t.title} ${t.body}`.toLowerCase().includes(q.toLowerCase()));
-  return <>
-    <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand/50">Care hub</p><h1 className="font-display text-3xl font-extrabold">Your plants</h1></div>
-    <div className="mt-5 space-y-4">{plants.map(p => <article key={p.name} className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-      <div className="flex gap-4 p-4"><img src={p.image} alt={p.name} loading="lazy" width={512} height={512} className="size-20 rounded-2xl object-cover" /><div className="flex-1"><div className="flex justify-between gap-2"><h2 className="font-display text-lg font-bold">{p.name}</h2><span className="h-fit rounded-full bg-moss/25 px-2 py-1 text-[10px] font-bold">{p.status}</span></div><p className="mt-1 text-xs text-brand/60">{p.water}</p></div></div>
-      <div className="grid grid-cols-2 gap-px bg-border">{([[Droplets, "Watering", p.water.includes("days") ? p.water : p.water], [Sun, "Light", p.light], [Sprout, "Soil", p.soil], [Wind, "Humidity", p.humidity]] as const).map(([I, k, v]) => <div key={k} className="bg-card p-3"><p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-brand/50"><I size={12} />{k}</p><p className="mt-1 text-xs font-medium">{v}</p></div>)}</div>
-    </article>)}</div>
-    <section className="mt-8"><h2 className="font-display text-xl font-extrabold">Tips & guidance</h2>
+  return <section className="mt-8"><h2 className="font-display text-xl font-extrabold">Tips & guidance</h2>
       <div className="relative mt-3"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand/40" /><Input value={q} onChange={e => setQ(e.target.value)} placeholder="Search tips, e.g. yellow leaves" className="pl-9" aria-label="Search tips" /></div>
       <div className="mt-3 flex gap-2">{["All", "Care", "Mistakes", "Seasonal"].map(c => <button key={c} onClick={() => setCat(c)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${cat === c ? "bg-brand text-brand-foreground" : "bg-secondary text-brand/70"}`}>{c}</button>)}</div>
       <div className="mt-4 space-y-2.5">{shown.map(t => <article key={t.title} className="rounded-2xl border border-border bg-card p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-moss">{t.cat}</p><h3 className="mt-0.5 font-display font-bold">{t.title}</h3><p className="mt-1 text-sm text-muted-foreground">{t.body}</p></article>)}{!shown.length && <p className="py-6 text-center text-sm text-muted-foreground">No tips match “{q}”.</p>}</div>
-    </section>
-  </>;
+    </section>;
 }
