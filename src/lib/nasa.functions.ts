@@ -27,7 +27,10 @@ async function fetchPower(lat: number, lon: number) {
     solar: val(p["ALLSKY_SFC_SW_DWN"]?.[k]), temp: val(p["T2M"]?.[k]), tmax: val(p["T2M_MAX"]?.[k]), tmin: val(p["T2M_MIN"]?.[k]),
     humidity: val(p["RH2M"]?.[k]), rain: val(p["PRECTOTCORR"]?.[k]),
   })).filter((d) => d.temp !== null);
-  return { days: days.slice(-7), latest: days.at(-1) ?? null };
+  const last = days.at(-1);
+  // Satellite solar values arrive a few days later than temperature; fall back to the most recent reading.
+  const latest = last ? { ...last, solar: last.solar ?? [...days].reverse().find((d) => d.solar !== null)?.solar ?? null } : null;
+  return { days: days.slice(-7), latest };
 }
 
 async function fetchFires(lat: number, lon: number): Promise<FireSummary> {
