@@ -199,7 +199,8 @@ function NotificationsCard({ demo }: { demo: boolean }) {
 
 export function RemindersView({ g, demo }: { g: Garden; demo: boolean }) {
   const [rem, setRem] = useState<{ r?: Reminder } | undefined>();
-  const due = g.reminders.filter((r) => new Date(r.next_due_at).getTime() <= Date.now() + 86400000 - (Date.now() % 86400000));
+  const endOfDay = new Date().setHours(23, 59, 59, 999);
+  const due = g.reminders.filter((r) => new Date(r.next_due_at).getTime() <= endOfDay);
   const overdue = g.reminders.filter((r) => new Date(r.next_due_at).getTime() < Date.now()).length;
   return <>
     <div className="flex items-end justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand/50">Care schedule</p><h1 className="font-display text-3xl font-extrabold">Reminders</h1></div><Button size="sm" onClick={() => setRem({})}><Plus /> New</Button></div>

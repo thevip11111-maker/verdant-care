@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ErrorComponentProps } from "@tanstack/react-router";
 import {
   Outlet,
   Link,
@@ -34,7 +35,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
@@ -77,10 +78,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Verdant — Plant Care & Diagnosis" },
+      { title: "Aegis Agria — Plant Care & Diagnosis" },
       { name: "description", content: "Identify plant health issues and keep every care routine on schedule." },
-      { name: "author", content: "Verdant" },
-      { property: "og:title", content: "Verdant — Plant Care & Diagnosis" },
+      { name: "author", content: "Aegis Agria" },
+      { property: "og:title", content: "Aegis Agria — Plant Care & Diagnosis" },
       { property: "og:description", content: "Identify plant health issues and keep every care routine on schedule." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
