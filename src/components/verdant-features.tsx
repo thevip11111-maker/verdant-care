@@ -70,51 +70,6 @@ function DiagnosisResult({ r, onReset }: { r: Diagnosis; onReset: () => void }) 
   </section>;
 }
 
-/* ---------------- Weather ---------------- */
-type Wx = { temp: number; humidity: number; uv: number; wind: number; code: number; days: { d: string; max: number; min: number; rain: number; code: number }[]; place: string };
-const codeLabel = (c: number) => c === 0 ? "Clear" : c <= 3 ? "Partly cloudy" : c <= 48 ? "Foggy" : c <= 67 ? "Rain" : c <= 77 ? "Snow" : c <= 82 ? "Showers" : "Storms";
-
-export function WeatherCard() {
-  const [wx, setWx] = useState<Wx>();
-  const [err, setErr] = useState("");
-  useEffect(() => {
-    const load = async (lat: number, lon: number, place: string) => {
-      try {
-        const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,uv_index&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=4`);
-        const j = await r.json();
-        setWx({ temp: j.current.temperature_2m, humidity: j.current.relative_humidity_2m, uv: j.current.uv_index ?? 0, wind: j.current.wind_speed_10m, code: j.current.weather_code, place,
-          days: j.daily.time.slice(1).map((d: string, i: number) => ({ d: new Date(d).toLocaleDateString(undefined, { weekday: "short" }), max: j.daily.temperature_2m_max[i + 1], min: j.daily.temperature_2m_min[i + 1], rain: j.daily.precipitation_probability_max[i + 1], code: j.daily.weather_code[i + 1] })) });
-      } catch { setErr("Weather is unavailable right now."); }
-    };
-    if (!navigator.geolocation) { load(40.71, -74.01, "New York"); return; }
-    navigator.geolocation.getCurrentPosition(p => load(p.coords.latitude, p.coords.longitude, "Your location"), () => load(40.71, -74.01, "New York (default)"), { timeout: 6000 });
-  }, []);
-
-  const advisories = useMemo(() => {
-    if (!wx) return [];
-    const a: { icon: typeof Sun; text: string; tone: "warn" | "ok" }[] = [];
-    if (wx.temp >= 30 && wx.humidity < 40) a.push({ icon: Droplets, text: "Dry heatwave — water outdoor pots early morning and check soil twice today.", tone: "warn" });
-    else if (wx.temp >= 28) a.push({ icon: Thermometer, text: "Warm day — soil will dry faster than usual.", tone: "warn" });
-    if (wx.uv >= 6) a.push({ icon: Sun, text: `High UV (${Math.round(wx.uv)}) — move tender plants into shade during midday.`, tone: "warn" });
-    if (wx.humidity > 80) a.push({ icon: Wind, text: "Very humid — improve airflow to prevent fungal spots.", tone: "warn" });
-    if (wx.temp <= 5) a.push({ icon: Thermometer, text: "Cold snap — bring tropical plants indoors tonight.", tone: "warn" });
-    if ((wx.days[0]?.rain ?? 0) >= 60) a.push({ icon: CloudSun, text: "Rain expected tomorrow — skip watering outdoor beds.", tone: "ok" });
-    if (!a.length) a.push({ icon: Leaf, text: "Mild conditions — a great day for repotting or pruning.", tone: "ok" });
-    return a;
-  }, [wx]);
-
-  return <section className="mt-6"><h2 className="font-display text-lg font-bold">Local weather</h2>
-    <div className="mt-3 rounded-3xl border border-brand/5 bg-card p-5 shadow-sm">
-      {!wx ? <div className="flex items-center gap-2 text-sm text-muted-foreground">{err || <><LoaderCircle className="animate-spin" size={16} /> Loading local weather…</>}</div> : <>
-        <div className="flex items-start justify-between"><div><p className="flex items-center gap-1 text-xs text-brand/50"><MapPin size={12} />{wx.place}</p><p className="mt-1 font-display text-5xl font-black leading-none">{Math.round(wx.temp)}°</p><p className="mt-1 text-sm font-semibold">{codeLabel(wx.code)}</p></div><CloudSun size={40} className="text-moss" /></div>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">{[["Humidity", `${wx.humidity}%`], ["UV index", Math.round(wx.uv)], ["Wind", `${Math.round(wx.wind)} km/h`]].map(([k, v]) => <div key={k} className="rounded-xl bg-secondary py-2"><p className="text-brand/50">{k}</p><p className="font-display font-bold">{v}</p></div>)}</div>
-        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-4 text-center text-xs">{wx.days.map(d => <div key={d.d}><p className="font-semibold">{d.d}</p><p className="text-brand/50">{codeLabel(d.code)}</p><p className="mt-0.5 font-display font-bold">{Math.round(d.max)}° <span className="font-normal text-brand/50">{Math.round(d.min)}°</span></p></div>)}</div>
-        <div className="mt-4 space-y-2">{advisories.map(({ icon: I, text, tone }) => <div key={text} className={`flex gap-2.5 rounded-xl p-3 text-xs ${tone === "warn" ? "bg-warning/10" : "bg-moss/20"}`}><I size={15} className={`shrink-0 ${tone === "warn" ? "text-warning" : "text-brand"}`} />{text}</div>)}</div>
-      </>}
-    </div>
-  </section>;
-}
-
 /* ---------------- Care hub ---------------- */
 const tips = [
   { cat: "Care", title: "Water by soil, not schedule", body: "Push a finger 2–3 cm into the soil. Water only when it feels dry at that depth." },
