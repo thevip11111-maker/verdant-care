@@ -84,8 +84,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "Aegis Agria — Plant Care & Diagnosis" },
       { property: "og:description", content: "Identify plant health issues and keep every care routine on schedule." },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:card", content: "summary_large_image" }
     ],
     links: [
       {
