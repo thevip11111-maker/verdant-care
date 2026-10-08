@@ -92,7 +92,11 @@ function AuthScreen({ mode, setMode, message, busy, onSubmit, onDemo }: { mode: 
         {mode === "login" && <button type="button" onClick={() => setMode("forgot")} className="text-sm font-semibold text-brand/70">Forgot password?</button>}
         <Button size="lg" className="w-full" disabled={busy}>{busy && <LoaderCircle className="animate-spin" />}{mode === "signup" ? "Create account" : mode === "forgot" ? "Send reset link" : "Sign in"}</Button>
       </form>
-      {mode !== "forgot" && <><div className="my-5 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border"/>or<span className="h-px flex-1 bg-border"/></div><Button variant="outline" size="lg" className="w-full" onClick={async () => { const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin }); if (result.error) setMode("login"); }}>Continue with Google</Button></>}
+      {mode !== "forgot" && <><div className="my-5 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border"/>or<span className="h-px flex-1 bg-border"/></div><Button variant="outline" size="lg" className="w-full" onClick={async () => { const { error } = await supabase.auth.signInWithOAuth({
+  provider: "google",
+  options: { redirectTo: window.location.origin }
+});
+if (error) setMessage(error.message);}}>Continue with Google</Button></>}
       {message && <p className="mt-4 rounded-xl bg-secondary p-3 text-sm" role="status">{message}</p>}
       <div className="mt-6 text-center text-sm text-muted-foreground">{mode === "login" ? <>New to Aegis Agria? <button className="font-semibold text-brand" onClick={() => setMode("signup")}>Create an account</button></> : <button className="font-semibold text-brand" onClick={() => setMode("login")}>Back to sign in</button>}</div>
     </section>
