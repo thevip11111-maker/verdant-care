@@ -143,12 +143,20 @@ type Prefs = { name: string; units: "metric" | "imperial"; experience: "beginner
 function usePrefs(signedIn: boolean) {
   const [prefs, setPrefs] = useState<Prefs>({ name: "", units: "metric", experience: "beginner" });
   useEffect(() => {
-    try { const v = JSON.parse(localStorage.getItem(PREFS_KEY) ?? ""); setPrefs(p => ({ ...p, ...v })); } catch { /* none saved */ }
-    if (signedIn) supabase.from("profiles").select("display_name").maybeSingle().then(({ data }) => { if (data?.display_name) setPrefs(p => ({ ...p, name: p.name || data.display_name })); });
+    const key = signedIn ? null : PREFS_KEY;
+    if (key) { try { const v = JSON.parse(localStorage.getItem(key) ?? ""); setPrefs(p => ({ ...p, ...v })); } catch { /* none saved */ } return; }
+    supabase.auth.getUser().then(async ({ data: u }) => {
+      if (!u.user) return;
+      try { const v = JSON.parse(localStorage.getItem(`${PREFS_KEY}-${u.user.id}`) ?? ""); setPrefs(p => ({ ...p, ...v })); } catch { /* none saved */ }
+      const { data } = await supabase.from("profiles").select("display_name").eq("id", u.user.id).maybeSingle();
+      if (data?.display_name) setPrefs(p => ({ ...p, name: data.display_name }));
+    });
   }, [signedIn]);
   const save = async (next: Prefs) => {
-    setPrefs(next); localStorage.setItem(PREFS_KEY, JSON.stringify(next));
-    if (signedIn) { const { data } = await supabase.auth.getUser(); if (data.user) await supabase.from("profiles").update({ display_name: next.name }).eq("id", data.user.id); }
+    setPrefs(next);
+    if (!signedIn) { localStorage.setItem(PREFS_KEY, JSON.stringify(next)); return; }
+    const { data } = await supabase.auth.getUser();
+    if (data.user) { localStorage.setItem(`${PREFS_KEY}-${data.user.id}`, JSON.stringify(next)); await supabase.from("profiles").update({ display_name: next.name }).eq("id", data.user.id); }
   };
   return { prefs, save };
 }
