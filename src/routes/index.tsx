@@ -66,7 +66,7 @@ function AegisApp() {
   }
 
   if (signedIn === null) return <div className="grid min-h-screen place-items-center bg-surface"><LoaderCircle className="animate-spin text-brand" /></div>;
-  if (!signedIn && !demo) return <AuthScreen mode={mode} setMode={setMode} message={message} busy={busy} onSubmit={handleAuth} onDemo={() => setDemo(true)} />;
+  if (!signedIn && !demo) return <AuthScreen mode={mode} setMode={setMode} message={message} busy={busy} onSubmit={handleAuth} onDemo={() => setDemo(true)} setMessage={setMessage} />;
 
   const signOut = async () => { if (demo) { setDemo(false); setView("home"); return; } await supabase.auth.signOut(); setView("home"); };
   return <AppShell view={view} setView={setView} avatarUrl={avatarUrl} onSignOut={signOut}>
@@ -78,7 +78,7 @@ function AegisApp() {
   </AppShell>;
 }
 
-function AuthScreen({ mode, setMode, message, busy, onSubmit, onDemo }: { mode: AuthMode; setMode: (m: AuthMode) => void; message: string; busy: boolean; onSubmit: (e: FormEvent<HTMLFormElement>) => void; onDemo: () => void }) {
+function AuthScreen({ mode, setMode, message, busy, onSubmit, onDemo, setMessage }: { setMessage: (m: string) => void; mode: AuthMode; setMode: (m: AuthMode) => void; message: string; busy: boolean; onSubmit: (e: FormEvent<HTMLFormElement>) => void; onDemo: () => void }) {
   const title = mode === "signup" ? "Create your garden" : mode === "forgot" ? "Reset your password" : "Welcome back";
   return <main className="min-h-screen bg-surface px-5 py-8"><div className="mx-auto max-w-md">
     <div className="mb-10 flex items-center gap-2"><span className="grid size-9 place-items-center rounded-xl bg-brand text-brand-foreground"><Leaf size={18}/></span><div><p className="font-display text-xs font-bold uppercase tracking-[0.22em] text-brand/50">Aegis Agria</p><p className="font-display text-lg font-extrabold leading-none">Plant Intelligence</p></div></div>
