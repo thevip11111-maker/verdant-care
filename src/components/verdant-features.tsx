@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { diagnoseLeaf, type Diagnosis } from "@/lib/diagnose.functions";
 import { supabase } from "@/integrations/supabase/client";
 
-type HistoryItem = { id: string; created_at: string; image?: string | undefined; r: Diagnosis };
+export type HistoryItem = { id: string; created_at: string; image?: string | undefined; r: Diagnosis };
 
 async function dataUrlToBlob(u: string) { return (await fetch(u)).blob(); }
 
@@ -18,7 +18,9 @@ async function saveScan(image: string, r: Diagnosis) {
   await supabase.from("diagnoses").insert({ user_id: auth.user.id, image_url: up.error ? null : path, disease_name: r.condition, certainty: Math.round(r.confidence), status: r.healthy ? "healthy" : "needs_care", recommendations: { plant: r.plant, healthy: r.healthy, symptoms: r.symptoms, treatment: r.treatment } });
 }
 
-async function loadHistory(): Promise<HistoryItem[]> {
+export const GUEST_SCANS = "aegis-guest-scans";
+export function loadGuestScans(): HistoryItem[] { try { return JSON.parse(localStorage.getItem(GUEST_SCANS) ?? "[]"); } catch { return []; } }
+export async function loadHistory(): Promise<HistoryItem[]> {
   const { data } = await supabase.from("diagnoses").select("id, created_at, image_url, disease_name, certainty, status, recommendations").order("created_at", { ascending: false }).limit(30);
   if (!data?.length) return [];
   const paths = data.map(d => d.image_url).filter((x): x is string => !!x);
@@ -58,7 +60,7 @@ export function ScannerView() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [signedIn, setSignedIn] = useState(false);
   const [openId, setOpenId] = useState<string>();
-  useEffect(() => { supabase.auth.getUser().then(({ data }) => { setSignedIn(!!data.user); if (data.user) loadHistory().then(setHistory); }); }, []);
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => { setSignedIn(!!data.user); if (data.user) loadHistory().then(setHistory); else setHistory(loadGuestScans()); }); }, []);
 
   async function choose(file?: File) {
     if (!file) return;
@@ -66,7 +68,7 @@ export function ScannerView() {
       const url = await fileToDataUrl(file);
       setImage(url); setState("analyzing"); setResult(undefined);
       const r = await analyze({ data: { image: url } });
-      if (r.ok) { setResult(r.result); setState("result"); if (signedIn) { saveScan(url, r.result).then(loadHistory).then(setHistory).catch(() => {}); } } else { setError(r.error); setState("error"); }
+      if (r.ok) { setResult(r.result); setState("result"); if (signedIn) { saveScan(url, r.result).then(loadHistory).then(setHistory).catch(() => {}); } else { const next = [{ id: crypto.randomUUID(), created_at: new Date().toISOString(), image: url, r: r.result }, ...history].slice(0, 10); setHistory(next); try { localStorage.setItem(GUEST_SCANS, JSON.stringify(next)); } catch { localStorage.setItem(GUEST_SCANS, JSON.stringify(next.map(h => ({ ...h, image: undefined })))); } } } else { setError(r.error); setState("error"); }
     } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong."); setState("error"); }
   }
 
@@ -96,7 +98,7 @@ export function ScannerView() {
           {openId === h.id && <div className="border-t border-border p-4">
             {h.r.symptoms.length > 0 && <ul className="mb-3 flex flex-wrap gap-1.5">{h.r.symptoms.map(s => <li key={s} className="rounded-full bg-secondary px-2.5 py-1 text-[11px]">{s}</li>)}</ul>}
             <ol className="space-y-2 text-sm">{h.r.treatment.map((x, i) => <li key={x} className="flex gap-2.5"><span className="grid size-5 shrink-0 place-items-center rounded-full bg-moss/30 text-[11px] font-bold">{i + 1}</span>{x}</li>)}</ol>
-            <button className="mt-3 text-xs font-semibold text-destructive" onClick={async () => { await supabase.from("diagnoses").delete().eq("id", h.id); setHistory(history.filter(x => x.id !== h.id)); }}>Delete from history</button>
+            <button className="mt-3 text-xs font-semibold text-destructive" onClick={async () => { const next = history.filter(x => x.id !== h.id); if (signedIn) await supabase.from("diagnoses").delete().eq("id", h.id); else localStorage.setItem(GUEST_SCANS, JSON.stringify(next)); setHistory(next); }}>Delete from history</button>
           </div>}
         </article>)}</div>}
     </section>

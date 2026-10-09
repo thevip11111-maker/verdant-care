@@ -69,3 +69,13 @@ export const getSatelliteData = createServerFn({ method: "POST" })
       fires: fires.status === "fulfilled" ? fires.value : { count: 0, nearestKm: null, maxFrp: null, radiusKm: 100, available: false },
     };
   });
+
+export type Place = { name: string; lat: number; lon: number };
+export const searchPlaces = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ q: z.string().trim().min(2).max(120) }).parse(d))
+  .handler(async ({ data }): Promise<Place[]> => {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(data.q)}`, { headers: { "User-Agent": "AegisAgria/1.0 (plant care app)", "Accept-Language": "en" } });
+    if (!res.ok) throw new Error(`Place search failed (${res.status})`);
+    const j = (await res.json()) as { display_name: string; lat: string; lon: string }[];
+    return j.map((p) => ({ name: p.display_name, lat: Number(p.lat), lon: Number(p.lon) }));
+  });

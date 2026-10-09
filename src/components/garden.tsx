@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { Plant, PlantInput, Reminder, ReminderInput, useGarden } from "@/hooks/use-garden";
-import { getSatelliteData, type SatelliteData } from "@/lib/nasa.functions";
+import { getSatelliteData, searchPlaces, type Place, type SatelliteData } from "@/lib/nasa.functions";
 import { disablePush, enablePush, getPushState, type PushState } from "@/lib/push-client";
 import { sendTestPush } from "@/lib/push.functions";
 
@@ -213,16 +213,40 @@ export function RemindersView({ g, demo }: { g: Garden; demo: boolean }) {
 }
 
 /* ---------------- NASA satellite card ---------------- */
+const LOC_KEY = "aegis-location";
 export function SatelliteCard() {
   const fetchSat = useServerFn(getSatelliteData);
+  const search = useServerFn(searchPlaces);
   const [data, setData] = useState<SatelliteData>();
-  const [place, setPlace] = useState("");
+  const [place, setPlace] = useState<Place>();
   const [err, setErr] = useState("");
-  useEffect(() => {
-    const load = (lat: number, lon: number, label: string) => { setPlace(label); fetchSat({ data: { lat, lon } }).then(setData).catch(() => setErr("Satellite data is unavailable right now.")); };
-    if (!navigator.geolocation) { load(40.71, -74.01, "New York (default)"); return; }
-    navigator.geolocation.getCurrentPosition((p) => load(p.coords.latitude, p.coords.longitude, `${p.coords.latitude.toFixed(2)}°, ${p.coords.longitude.toFixed(2)}°`), () => load(40.71, -74.01, "New York (default)"), { timeout: 6000 });
-  }, [fetchSat]);
+  const [picking, setPicking] = useState(false);
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<Place[]>([]);
+  const [searching, setSearching] = useState(false);
+  const load = (p: Place) => {
+    setPlace(p); setData(undefined); setErr(""); setPicking(false); setResults([]); setQ("");
+    localStorage.setItem(LOC_KEY, JSON.stringify(p));
+    fetchSat({ data: { lat: p.lat, lon: p.lon } }).then(setData).catch(() => setErr("Satellite data is unavailable right now."));
+  };
+  useEffect(() => { try { const p = JSON.parse(localStorage.getItem(LOC_KEY) ?? ""); if (typeof p?.lat === "number") load(p); } catch { /* no saved location */ } }, []);
+  async function runSearch(e: FormEvent) {
+    e.preventDefault(); if (q.trim().length < 2) return;
+    setSearching(true); setErr("");
+    try { const r = await search({ data: { q } }); setResults(r); if (!r.length) setErr("No places found. Try a city or region name."); } catch { setErr("Place search is unavailable right now."); }
+    setSearching(false);
+  }
+  function useMine() {
+    if (!navigator.geolocation) { setErr("Your browser can't share location. Search for a place instead."); return; }
+    setSearching(true);
+    navigator.geolocation.getCurrentPosition((p) => { setSearching(false); load({ name: `My location (${p.coords.latitude.toFixed(2)}°, ${p.coords.longitude.toFixed(2)}°)`, lat: p.coords.latitude, lon: p.coords.longitude }); }, () => { setSearching(false); setErr("Location permission was denied. Search for a place instead."); }, { timeout: 8000 });
+  }
+  const picker = <div className="space-y-3">
+    <form onSubmit={runSearch} className="flex gap-2"><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a city, town or region" aria-label="Search location" /><Button type="submit" disabled={searching}>{searching ? <LoaderCircle className="animate-spin" /> : "Search"}</Button></form>
+    {results.length > 0 && <ul className="divide-y divide-border rounded-xl border border-border">{results.map((r) => <li key={`${r.lat},${r.lon}`}><button type="button" onClick={() => load(r)} className="flex w-full items-start gap-2 p-3 text-left text-xs hover:bg-secondary"><MapPin size={13} className="mt-0.5 shrink-0" />{r.name}</button></li>)}</ul>}
+    <div className="flex items-center justify-between"><button type="button" onClick={useMine} className="flex items-center gap-1 text-xs font-semibold text-brand"><MapPin size={13} />Use my current location</button>{place && <button type="button" onClick={() => { setPicking(false); setResults([]); setErr(""); }} className="text-xs font-semibold text-brand/50">Cancel</button>}</div>
+    {err && <p className="text-xs text-muted-foreground" role="status">{err}</p>}
+  </div>;
 
   const advisories = useMemo(() => {
     if (!data) return [];
@@ -247,8 +271,9 @@ export function SatelliteCard() {
   const tone = { warn: "bg-warning/10", ok: "bg-moss/20", alert: "bg-destructive/10" };
   return <section className="mt-6"><div className="flex items-end justify-between"><h2 className="font-display text-lg font-bold">Satellite conditions</h2><span className="flex items-center gap-1 text-[11px] font-semibold text-brand/50"><Satellite size={12} />NASA POWER · FIRMS</span></div>
     <div className="mt-3 rounded-3xl border border-brand/5 bg-card p-5 shadow-sm">
-      {!data ? <div className="flex items-center gap-2 text-sm text-muted-foreground">{err || <><LoaderCircle className="animate-spin" size={16} /> Reading satellite data…</>}</div> : <>
-        <div className="flex items-start justify-between"><div><p className="flex items-center gap-1 text-xs text-brand/50"><MapPin size={12} />{place}</p>
+      {!place || picking ? <>{!place && <div className="mb-4"><h3 className="font-display text-base font-bold">Choose your location</h3><p className="mt-1 text-sm text-muted-foreground">Pick where your plants grow to see NASA climate readings and nearby fire alerts.</p></div>}{picker}</>
+      : !data ? <div className="flex items-center gap-2 text-sm text-muted-foreground">{err || <><LoaderCircle className="animate-spin" size={16} /> Reading satellite data…</>}</div> : <>
+        <div className="flex items-start justify-between"><div className="min-w-0"><button type="button" onClick={() => setPicking(true)} className="flex max-w-full items-center gap-1 text-left text-xs text-brand/50 hover:text-brand" aria-label="Change location"><MapPin size={12} className="shrink-0" /><span className="truncate">{place.name.split(",").slice(0, 2).join(",")}</span><Pencil size={11} className="shrink-0" /></button>
           {l ? <><p className="mt-1 font-display text-5xl font-black leading-none">{Math.round(l.temp ?? 0)}°</p><p className="mt-1 text-sm font-semibold">{Math.round(l.tmin ?? 0)}° – {Math.round(l.tmax ?? 0)}° · {new Date(l.date + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p></> : <p className="mt-2 text-sm text-muted-foreground">Climate readings unavailable.</p>}</div>
           <div className={`rounded-2xl px-3 py-2 text-center ${!data.fires.available ? "bg-secondary" : data.fires.count ? "bg-destructive/10 text-destructive" : "bg-moss/25"}`}><Flame size={18} className="mx-auto" /><p className="mt-1 text-[11px] font-bold">{!data.fires.available ? "Fire data off" : data.fires.count ? `${data.fires.count} hotspots` : "No fires"}</p><p className="text-[10px] opacity-70">{data.fires.radiusKm} km · 48h</p></div></div>
         {l && <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">{[["Solar", l.solar != null ? `${l.solar.toFixed(1)} kWh` : "—"], ["Humidity", l.humidity != null ? `${Math.round(l.humidity)}%` : "—"], ["Rain", l.rain != null ? `${l.rain.toFixed(1)} mm` : "—"]].map(([k, v]) => <div key={k} className="rounded-xl bg-secondary py-2"><p className="text-brand/50">{k}</p><p className="font-display font-bold">{v}</p></div>)}</div>}
