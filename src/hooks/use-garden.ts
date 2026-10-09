@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import monstera from "@/assets/monstera-spots.jpg";
-import ficus from "@/assets/fiddle-leaf.jpg";
 
 export type Plant = Tables<"plants">;
 export type Reminder = Tables<"care_reminders">;
@@ -12,18 +10,11 @@ export type ReminderInput = Pick<Reminder, "plant_id" | "kind" | "title" | "next
 const DAY = 86400000;
 const iso = (ms: number) => new Date(ms).toISOString();
 
-function demoData(): { plants: Plant[]; reminders: Reminder[] } {
-  const now = Date.now(), base = { user_id: "demo", created_at: iso(now), updated_at: iso(now) };
-  const plants: Plant[] = [
-    { ...base, id: "d1", name: "Monstera", variety: "Monstera deliciosa", location: "Living room", image_url: monstera, health_status: "watch", sunlight: "Bright, indirect", soil: "Chunky aroid mix", humidity: "60–70%", watering_advice: "When top 3 cm are dry", care_notes: null },
-    { ...base, id: "d2", name: "Fiddle Leaf Fig", variety: "Ficus lyrata", location: "Bedroom", image_url: ficus, health_status: "healthy", sunlight: "Bright, some direct sun", soil: "Well-draining loam", humidity: "40–60%", watering_advice: "Every 10–12 days", care_notes: null },
-  ];
-  const reminders: Reminder[] = [
-    { ...base, id: "r1", plant_id: "d1", kind: "water", title: "", next_due_at: iso(now - 3600000), frequency_days: 7, amount_ml: 250, enabled: true, last_completed_at: null, last_notified_at: null },
-    { ...base, id: "r2", plant_id: "d2", kind: "fertilize", title: "", next_due_at: iso(now + 3 * DAY), frequency_days: 30, amount_ml: null, enabled: true, last_completed_at: null, last_notified_at: null },
-  ];
-  return { plants, reminders };
+const DEMO_KEY = "aegis-guest-garden";
+function loadGuest(): { plants: Plant[]; reminders: Reminder[] } {
+  try { const v = JSON.parse(localStorage.getItem(DEMO_KEY) ?? ""); return { plants: v.plants ?? [], reminders: v.reminders ?? [] }; } catch { return { plants: [], reminders: [] }; }
 }
+const toDataUrl = (b: Blob) => new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(b); });
 
 async function compress(file: File): Promise<Blob> {
   const img = new Image();
@@ -70,9 +61,13 @@ export function useGarden(mode: "live" | "demo" | "off") {
 
   useEffect(() => {
     if (mode === "off") return;
-    if (mode === "demo") { const d = demoData(); setPlants(d.plants); setReminders(d.reminders); resolvePhotos(d.plants); setLoading(false); return; }
+    if (mode === "demo") { const d = loadGuest(); setPlants(d.plants); setReminders(d.reminders); resolvePhotos(d.plants); setLoading(false); return; }
     reload();
   }, [mode, reload, resolvePhotos]);
+
+  useEffect(() => {
+    if (mode === "demo" && !loading) localStorage.setItem(DEMO_KEY, JSON.stringify({ plants, reminders }));
+  }, [mode, loading, plants, reminders]);
 
   async function uid() {
     const { data } = await supabase.auth.getUser();
@@ -82,7 +77,7 @@ export function useGarden(mode: "live" | "demo" | "off") {
 
   const savePlant = async (input: PlantInput, id?: string, photo?: File) => {
     if (mode === "demo") {
-      const img = photo ? URL.createObjectURL(photo) : undefined;
+      const img = photo ? await toDataUrl(await compress(photo)) : undefined;
       const now = new Date().toISOString();
       const next = id
         ? plants.map((p) => (p.id === id ? { ...p, ...input, image_url: img ?? p.image_url } : p))
