@@ -1,64 +1,65 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+export type ScanStatus = "healthy" | "needs_attention" | "unclear";
 export type Diagnosis = {
   plant: string;
   condition: string;
   healthy: boolean;
   confidence: number;
-  symptoms: string[];
-  treatment: string[];
+  symptoms: string[]; // possible issues
+  treatment: string[]; // what to do
+  status?: ScanStatus;
+  summary?: string;
+  retakeTip?: string | null;
 };
 
-const PROMPT = `You are an expert plant pathologist. Examine the leaf photo and respond with ONLY a JSON object, no prose:
-{"plant": string (common plant name), "condition": string (e.g. "Early Blight", "Powdery Mildew", or "Healthy"), "healthy": boolean, "confidence": number 0-100, "symptoms": string[] (3-5 short observed symptoms), "treatment": string[] (3-6 concise step-by-step actions; for healthy plants give care steps)}.
-If the image is not a plant, set plant "Unknown", condition "No plant detected", confidence 0.`;
+const MODEL = "gemini-flash-latest";
+
+// Replace with the user's system prompt when provided. The JSON shape below must stay the same.
+const SYSTEM_PROMPT = `You are an expert plant pathologist helping home gardeners. Look at the leaf or plant photo and reply with ONLY JSON in this shape:
+{"status": "healthy" | "needs_attention" | "unclear", "plant": string, "summary": string (1-2 friendly sentences), "possible_issues": string[] (0-4 short items), "what_to_do": string[] (2-6 short practical steps), "confidence": number 0-100, "retake_tip": string | null}
+Use "unclear" when the photo is blurry, too dark, too far away or doesn't show a plant, and give a short retake_tip. Otherwise retake_tip is null.`;
 
 export const diagnoseLeaf = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ image: z.string().startsWith("data:image/").max(8_000_000) }).parse(d))
   .handler(async ({ data }): Promise<{ ok: true; result: Diagnosis } | { ok: false; error: string }> => {
-    const key = process.env['LOVABLE_API_KEY'];
-    if (!key) return { ok: false, error: "AI is not configured." };
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
+    const key = process.env["GEMINI_API_KEY"];
+    if (!key) return { ok: false, error: "The Gemini key hasn't been added yet." };
+    const m = data.image.match(/^data:(image\/[a-z+]+);base64,(.+)$/);
+    if (!m) return { ok: false, error: "Couldn't read that photo." };
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "fetch" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
-        model: "openai/gpt-6-astra",
-        stream: true,
-        store: false,
-        reasoning: { effort: "low" },
-        input: [{ role: "user", content: [{ type: "input_text", text: PROMPT }, { type: "input_image", image_url: data.image }] }],
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: "user", parts: [{ inline_data: { mime_type: m[1], data: m[2] } }, { text: "Analyze this plant photo." }] }],
+        generationConfig: { responseMimeType: "application/json" },
       }),
     });
-    if (!res.ok || !res.body) {
-      const msg = res.status === 429 ? "Too many scans right now — try again shortly." : res.status === 402 ? "AI credits are used up for this workspace." : `Analysis failed (${res.status}).`;
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`Gemini failed [${res.status}]: ${body}`);
+      const msg = res.status === 429 ? "Too many scans right now — try again shortly." : res.status === 400 || res.status === 403 ? "Gemini rejected the request. Check that your Gemini key is valid." : `Analysis failed (${res.status}).`;
       return { ok: false, error: msg };
     }
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = "", text = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop() ?? "";
-      for (const l of lines) {
-        if (!l.startsWith("data:")) continue;
-        const p = l.slice(5).trim();
-        if (!p || p === "[DONE]") continue;
-        try { const ev = JSON.parse(p); if (ev.type === "response.output_text.delta") text += ev.delta; } catch { /* partial */ }
-      }
-    }
-    const m = text.match(/\{[\s\S]*\}/);
-    if (!m) return { ok: false, error: "The AI couldn't read this photo. Try a clearer close-up." };
+    const j = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+    const jm = text.match(/\{[\s\S]*\}/);
+    if (!jm) return { ok: false, error: "Gemini couldn't read this photo. Try a clearer close-up." };
     try {
-      const r = JSON.parse(m[0]);
+      const r = JSON.parse(jm[0]);
+      const status: ScanStatus = ["healthy", "needs_attention", "unclear"].includes(r.status) ? r.status : "unclear";
+      const issues = (Array.isArray(r.possible_issues) ? r.possible_issues : []).map(String).slice(0, 6);
+      const conf = Number(r.confidence) || 0;
       return { ok: true, result: {
-        plant: String(r.plant ?? "Unknown"), condition: String(r.condition ?? "Unknown"), healthy: Boolean(r.healthy),
-        confidence: Math.max(0, Math.min(100, Math.round((Number(r.confidence) || 0) <= 1 ? (Number(r.confidence) || 0) * 100 : Number(r.confidence)))),
-        symptoms: (Array.isArray(r.symptoms) ? r.symptoms : []).map(String).slice(0, 6),
-        treatment: (Array.isArray(r.treatment) ? r.treatment : []).map(String).slice(0, 8),
+        status, plant: String(r.plant || "Plant"), summary: String(r.summary ?? ""),
+        condition: status === "healthy" ? "Healthy" : status === "unclear" ? "Photo unclear" : issues[0] ?? "Needs attention",
+        healthy: status === "healthy",
+        confidence: Math.max(0, Math.min(100, Math.round(conf <= 1 ? conf * 100 : conf))),
+        symptoms: issues,
+        treatment: (Array.isArray(r.what_to_do) ? r.what_to_do : []).map(String).slice(0, 8),
+        retakeTip: r.retake_tip ? String(r.retake_tip) : null,
       } };
-    } catch { return { ok: false, error: "The AI response was incomplete. Please try again." }; }
+    } catch { return { ok: false, error: "Gemini's answer was incomplete. Please try again." }; }
   });

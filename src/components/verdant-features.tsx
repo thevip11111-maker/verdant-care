@@ -68,7 +68,7 @@ export function ScannerView() {
       const url = await fileToDataUrl(file);
       setImage(url); setState("analyzing"); setResult(undefined);
       const r = await analyze({ data: { image: url } });
-      if (r.ok) { setResult(r.result); setState("result"); if (signedIn) { saveScan(url, r.result).then(loadHistory).then(setHistory).catch(() => {}); } else { const next = [{ id: crypto.randomUUID(), created_at: new Date().toISOString(), image: url, r: r.result }, ...history].slice(0, 10); setHistory(next); try { localStorage.setItem(GUEST_SCANS, JSON.stringify(next)); } catch { localStorage.setItem(GUEST_SCANS, JSON.stringify(next.map(h => ({ ...h, image: undefined })))); } } } else { setError(r.error); setState("error"); }
+      if (r.ok) { setResult(r.result); setState("result"); if (r.result.status === "unclear") {} else if (signedIn) { saveScan(url, r.result).then(loadHistory).then(setHistory).catch(() => {}); } else { const next = [{ id: crypto.randomUUID(), created_at: new Date().toISOString(), image: url, r: r.result }, ...history].slice(0, 10); setHistory(next); try { localStorage.setItem(GUEST_SCANS, JSON.stringify(next)); } catch { localStorage.setItem(GUEST_SCANS, JSON.stringify(next.map(h => ({ ...h, image: undefined })))); } } } else { setError(r.error); setState("error"); }
     } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong."); setState("error"); }
   }
 
@@ -106,13 +106,21 @@ export function ScannerView() {
 }
 
 function DiagnosisResult({ r, onReset }: { r: Diagnosis; onReset: () => void }) {
+  if (r.status === "unclear") return <section className="mt-5 rounded-3xl border border-warning/30 bg-warning/5 p-5">
+    <div className="flex items-center gap-2"><Camera size={18} className="text-warning" /><h2 className="font-display text-lg font-extrabold">Let's try another photo</h2></div>
+    {r.summary && <p className="mt-2 text-sm text-muted-foreground">{r.summary}</p>}
+    <p className="mt-3 rounded-xl bg-card p-3 text-sm"><span className="font-semibold">Retake tip: </span>{r.retakeTip || "Move closer, use natural light and keep the leaf in focus."}</p>
+    <Button className="mt-4 w-full" onClick={onReset}><RotateCcw /> Retake photo</Button>
+  </section>;
+  const label = r.healthy ? "Healthy" : "Needs attention";
   return <section className="mt-5 rounded-3xl border border-brand/5 bg-card p-5 shadow-sm">
-    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand/50">{r.plant}</p>
-    <div className="mt-1 flex items-center justify-between gap-2"><h2 className="font-display text-2xl font-extrabold">{r.condition}</h2><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${r.healthy ? "bg-moss/30 text-brand" : "bg-warning/15 text-warning"}`}>{r.healthy ? "Healthy" : "Needs care"}</span></div>
+    <div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand/50">{r.plant}</p><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${r.healthy ? "bg-moss/30 text-brand" : "bg-warning/15 text-warning"}`}>{label}</span></div>
+    <h2 className="mt-1 font-display text-2xl font-extrabold">{r.condition}</h2>
+    {r.summary && <p className="mt-2 text-sm text-muted-foreground">{r.summary}</p>}
     <div className="mt-4 flex justify-between text-xs font-semibold"><span className="text-brand/50">Confidence</span><span>{r.confidence}%</span></div>
     <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-moss/25"><div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${r.confidence}%` }} /></div>
-    {r.symptoms.length > 0 && <><h3 className="mt-5 font-display text-sm font-bold">Symptoms observed</h3><ul className="mt-2 flex flex-wrap gap-2">{r.symptoms.map(s => <li key={s} className="rounded-full bg-secondary px-3 py-1 text-xs">{s}</li>)}</ul></>}
-    <h3 className="mt-5 font-display text-sm font-bold">{r.healthy ? "Care plan" : "Treatment plan"}</h3>
+    {r.symptoms.length > 0 && <><h3 className="mt-5 font-display text-sm font-bold">Possible issues</h3><ul className="mt-2 flex flex-wrap gap-2">{r.symptoms.map(s => <li key={s} className="rounded-full bg-secondary px-3 py-1 text-xs">{s}</li>)}</ul></>}
+    <h3 className="mt-5 font-display text-sm font-bold">What to do</h3>
     <ol className="mt-2 space-y-2.5 text-sm">{r.treatment.map((x, i) => <li key={x} className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-moss/30 text-xs font-bold">{i + 1}</span><span className="pt-0.5">{x}</span></li>)}</ol>
     <Button variant="outline" className="mt-5 w-full" onClick={onReset}><RotateCcw /> Scan another leaf</Button>
   </section>;
