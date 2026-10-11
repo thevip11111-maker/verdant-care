@@ -16,7 +16,7 @@ export type Diagnosis = {
   issues?: Issue[];
 };
 
-const MODEL = "gemini-flash-latest";
+const MODEL = "gemini-3-flash-preview";
 
 const SYSTEM_PROMPT = `You are the plant buddy inside AgroCheck, a friendly app that helps anyone grow plants, even beginners who aren't serious about it.
 

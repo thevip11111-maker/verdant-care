@@ -87,7 +87,7 @@ export function ScannerView() {
     {state === "error" && <div role="alert" className="mt-5 flex gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm"><AlertTriangle size={18} className="shrink-0 text-destructive" />{error}</div>}
     {state === "result" && result && <DiagnosisResult r={result} onReset={() => { setImage(undefined); setState("idle"); }} />}
     <section className="mt-8"><h2 className="font-display text-xl font-extrabold">Scan history</h2>
-      {!signedIn ? <p className="mt-2 text-sm text-muted-foreground">Sign in to keep a history of your scans.</p>
+      {!signedIn && !history.length ? <p className="mt-2 text-sm text-muted-foreground">Your scans will be saved on this device. Sign in to keep them across devices.</p>
       : !history.length ? <p className="mt-2 text-sm text-muted-foreground">Your past diagnoses and treatment plans will appear here.</p>
       : <div className="mt-3 space-y-2.5">{history.map(h => <article key={h.id} className="overflow-hidden rounded-2xl border border-border bg-card">
           <button className="flex w-full items-center gap-3 p-3 text-left" onClick={() => setOpenId(openId === h.id ? undefined : h.id)} aria-expanded={openId === h.id}>
