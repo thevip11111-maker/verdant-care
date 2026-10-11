@@ -15,7 +15,7 @@ async function saveScan(image: string, r: Diagnosis) {
   if (!auth.user) return;
   const path = `${auth.user.id}/scans/${crypto.randomUUID()}.jpg`;
   const up = await supabase.storage.from("plant-photos").upload(path, await dataUrlToBlob(image), { contentType: "image/jpeg" });
-  await supabase.from("diagnoses").insert({ user_id: auth.user.id, image_url: up.error ? null : path, disease_name: r.condition, certainty: Math.round(r.confidence), status: r.healthy ? "healthy" : "needs_care", recommendations: { plant: r.plant, healthy: r.healthy, symptoms: r.symptoms, treatment: r.treatment } });
+  await supabase.from("diagnoses").insert({ user_id: auth.user.id, image_url: up.error ? null : path, disease_name: r.condition, certainty: Math.round(r.confidence), status: r.healthy ? "healthy" : "needs_care", recommendations: { plant: r.plant, healthy: r.healthy, status: r.status ?? null, summary: r.summary ?? null, issues: r.issues ?? [], symptoms: r.symptoms, treatment: r.treatment } });
 }
 
 export const GUEST_SCANS = "aegis-guest-scans";
@@ -29,7 +29,7 @@ export async function loadHistory(): Promise<HistoryItem[]> {
   return data.map(d => {
     const rec = (d.recommendations ?? {}) as Partial<Diagnosis>;
     return { id: d.id, created_at: d.created_at, image: d.image_url ? urls.get(d.image_url) ?? undefined : undefined,
-      r: { plant: rec.plant ?? "Plant", condition: d.disease_name, healthy: rec.healthy ?? d.status === "healthy", confidence: d.certainty, symptoms: Array.isArray(rec.symptoms) ? rec.symptoms : [], treatment: Array.isArray(rec.treatment) ? rec.treatment : (Array.isArray(d.recommendations) ? d.recommendations as string[] : []) } };
+      r: { ...(rec.summary ? { summary: rec.summary } : {}), ...(rec.issues ? { issues: rec.issues } : {}), ...(rec.status ? { status: rec.status } : {}), plant: rec.plant ?? "Plant", condition: d.disease_name, healthy: rec.healthy ?? d.status === "healthy", confidence: d.certainty, symptoms: Array.isArray(rec.symptoms) ? rec.symptoms : [], treatment: Array.isArray(rec.treatment) ? rec.treatment : (Array.isArray(d.recommendations) ? d.recommendations as string[] : []) } };
   });
 }
 
@@ -112,14 +112,14 @@ function DiagnosisResult({ r, onReset }: { r: Diagnosis; onReset: () => void }) 
     <p className="mt-3 rounded-xl bg-card p-3 text-sm"><span className="font-semibold">Retake tip: </span>{r.retakeTip || "Move closer, use natural light and keep the leaf in focus."}</p>
     <Button className="mt-4 w-full" onClick={onReset}><RotateCcw /> Retake photo</Button>
   </section>;
-  const label = r.healthy ? "Healthy" : "Needs attention";
+  const label = r.status === "unhealthy" ? "Unwell" : r.healthy ? "Healthy" : "Needs care";
+  const tone = { high: "bg-warning/15 text-warning", medium: "bg-secondary text-brand", low: "bg-muted text-muted-foreground" };
   return <section className="mt-5 rounded-3xl border border-brand/5 bg-card p-5 shadow-sm">
     <div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand/50">{r.plant}</p><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${r.healthy ? "bg-moss/30 text-brand" : "bg-warning/15 text-warning"}`}>{label}</span></div>
     <h2 className="mt-1 font-display text-2xl font-extrabold">{r.condition}</h2>
     {r.summary && <p className="mt-2 text-sm text-muted-foreground">{r.summary}</p>}
-    <div className="mt-4 flex justify-between text-xs font-semibold"><span className="text-brand/50">Confidence</span><span>{r.confidence}%</span></div>
-    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-moss/25"><div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${r.confidence}%` }} /></div>
-    {r.symptoms.length > 0 && <><h3 className="mt-5 font-display text-sm font-bold">Possible issues</h3><ul className="mt-2 flex flex-wrap gap-2">{r.symptoms.map(s => <li key={s} className="rounded-full bg-secondary px-3 py-1 text-xs">{s}</li>)}</ul></>}
+    {r.issues?.length ? <><h3 className="mt-5 font-display text-sm font-bold">Possible issues</h3><ul className="mt-2 space-y-2">{r.issues.map(i => <li key={i.name} className="rounded-xl bg-secondary/60 p-3"><div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold">{i.name}</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${tone[i.confidence]}`}>{i.confidence}</span></div>{i.why && <p className="mt-1 text-xs text-muted-foreground">{i.why}</p>}</li>)}</ul></>
+    : r.symptoms.length > 0 && <><h3 className="mt-5 font-display text-sm font-bold">Possible issues</h3><ul className="mt-2 flex flex-wrap gap-2">{r.symptoms.map(s => <li key={s} className="rounded-full bg-secondary px-3 py-1 text-xs">{s}</li>)}</ul></>}
     <h3 className="mt-5 font-display text-sm font-bold">What to do</h3>
     <ol className="mt-2 space-y-2.5 text-sm">{r.treatment.map((x, i) => <li key={x} className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-moss/30 text-xs font-bold">{i + 1}</span><span className="pt-0.5">{x}</span></li>)}</ol>
     <Button variant="outline" className="mt-5 w-full" onClick={onReset}><RotateCcw /> Scan another leaf</Button>

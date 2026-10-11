@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-export type ScanStatus = "healthy" | "needs_attention" | "unclear";
+export type ScanStatus = "healthy" | "needs_care" | "unhealthy" | "unclear";
+export type Issue = { name: string; confidence: "high" | "medium" | "low"; why: string };
 export type Diagnosis = {
   plant: string;
   condition: string;
@@ -12,14 +13,34 @@ export type Diagnosis = {
   status?: ScanStatus;
   summary?: string;
   retakeTip?: string | null;
+  issues?: Issue[];
 };
 
 const MODEL = "gemini-flash-latest";
 
-// Replace with the user's system prompt when provided. The JSON shape below must stay the same.
-const SYSTEM_PROMPT = `You are an expert plant pathologist helping home gardeners. Look at the leaf or plant photo and reply with ONLY JSON in this shape:
-{"status": "healthy" | "needs_attention" | "unclear", "plant": string, "summary": string (1-2 friendly sentences), "possible_issues": string[] (0-4 short items), "what_to_do": string[] (2-6 short practical steps), "confidence": number 0-100, "retake_tip": string | null}
-Use "unclear" when the photo is blurry, too dark, too far away or doesn't show a plant, and give a short retake_tip. Otherwise retake_tip is null.`;
+const SYSTEM_PROMPT = `You are the plant buddy inside AgroCheck, a friendly app that helps anyone grow plants, even beginners who aren't serious about it.
+
+The user sends a photo of a plant or leaf. Look carefully and tell them how the plant is doing.
+
+Rules:
+- Be warm, simple and encouraging. No scary jargon. Never make the user feel bad about a struggling plant.
+- If the photo is not a plant, or is too blurry, dark or far away, set "status" to "unclear" and ask for a clearer, closer photo in natural light.
+- Never be overconfident. If you are not sure, say so. Give up to 3 possible causes, most likely first, each with a confidence of "high", "medium" or "low".
+- Think about common causes: underwatering, overwatering, too little or too much sun, nutrient problems, pests, fungus, bacteria, virus.
+- Give simple steps a beginner can do today with things they probably have at home.
+- Do not claim to be a doctor or give a final diagnosis. Use words like "looks like" or "possibly".
+
+Reply ONLY with valid JSON, no extra text and no markdown fences, in this shape:
+{
+  "plant": "name of the plant, or 'unknown'",
+  "status": "healthy | needs_care | unhealthy | unclear",
+  "summary": "one friendly sentence about how the plant looks",
+  "possible_issues": [
+    { "name": "", "confidence": "high | medium | low", "why": "what in the photo suggests this" }
+  ],
+  "what_to_do": ["step 1", "step 2", "step 3"],
+  "retake_tip": "only if status is unclear, otherwise empty"
+}`;
 
 export const diagnoseLeaf = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ image: z.string().startsWith("data:image/").max(8_000_000) }).parse(d))
@@ -49,15 +70,18 @@ export const diagnoseLeaf = createServerFn({ method: "POST" })
     if (!jm) return { ok: false, error: "Gemini couldn't read this photo. Try a clearer close-up." };
     try {
       const r = JSON.parse(jm[0]);
-      const status: ScanStatus = ["healthy", "needs_attention", "unclear"].includes(r.status) ? r.status : "unclear";
-      const issues = (Array.isArray(r.possible_issues) ? r.possible_issues : []).map(String).slice(0, 6);
-      const conf = Number(r.confidence) || 0;
+      const status: ScanStatus = ["healthy", "needs_care", "unhealthy", "unclear"].includes(r.status) ? r.status : "unclear";
+      const issues: Issue[] = (Array.isArray(r.possible_issues) ? r.possible_issues : []).slice(0, 3).map((i: { name?: unknown; confidence?: unknown; why?: unknown }) => ({
+        name: String(i?.name ?? "").trim(), why: String(i?.why ?? ""),
+        confidence: (["high", "medium", "low"].includes(String(i?.confidence)) ? i.confidence : "low") as Issue["confidence"],
+      })).filter((i: Issue) => i.name);
+      const score = { high: 85, medium: 60, low: 35 };
       return { ok: true, result: {
-        status, plant: String(r.plant || "Plant"), summary: String(r.summary ?? ""),
-        condition: status === "healthy" ? "Healthy" : status === "unclear" ? "Photo unclear" : issues[0] ?? "Needs attention",
+        status, plant: String(r.plant || "unknown"), summary: String(r.summary ?? ""), issues,
+        condition: status === "healthy" ? "Looking healthy" : status === "unclear" ? "Photo unclear" : issues[0]?.name ?? (status === "unhealthy" ? "Unwell" : "Needs a little care"),
         healthy: status === "healthy",
-        confidence: Math.max(0, Math.min(100, Math.round(conf <= 1 ? conf * 100 : conf))),
-        symptoms: issues,
+        confidence: status === "unclear" ? 0 : status === "healthy" ? 80 : score[issues[0]?.confidence ?? "low"],
+        symptoms: issues.map((i) => i.name),
         treatment: (Array.isArray(r.what_to_do) ? r.what_to_do : []).map(String).slice(0, 8),
         retakeTip: r.retake_tip ? String(r.retake_tip) : null,
       } };
