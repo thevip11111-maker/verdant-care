@@ -61,7 +61,7 @@ function AegisApp() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => { if (data.user) markReturning(data.user.email ?? ""); setSignedIn(Boolean(data.user)); });
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN") { markReturning(session.user?.email ?? ""); setSignedIn(true); }
+      if (event === "SIGNED_IN") { markReturning(session?.user?.email ?? ""); setSignedIn(true); }
       if (event === "SIGNED_OUT") setSignedIn(false);
     });
     return () => data.subscription.unsubscribe();
