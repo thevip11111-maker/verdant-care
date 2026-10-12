@@ -25,6 +25,28 @@ export const Route = createFileRoute("/")({
 type View = "home" | "plants" | "scan" | "water" | "profile";
 type AuthMode = "login" | "signup" | "forgot";
 
+const SEEN_KEY = "aegis-seen";
+const ACCOUNTS_KEY = "aegis-accounts";
+
+function readLocal<T>(key: string, fallback: T): T {
+  try { const v = JSON.parse(localStorage.getItem(key) ?? ""); return (v ?? fallback) as T; } catch { return fallback; }
+}
+function writeLocal(key: string, value: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+}
+// Remembers that this device has used the app before, and which accounts signed in here,
+// so returning people see "Welcome back" and first-timers just see "Welcome".
+function markReturning(email?: string) {
+  writeLocal(SEEN_KEY, true);
+  const norm = (email ?? "").trim().toLowerCase();
+  if (!norm) return;
+  const accounts = readLocal<string[]>(ACCOUNTS_KEY, []);
+  if (!accounts.includes(norm)) writeLocal(ACCOUNTS_KEY, [...accounts, norm]);
+}
+function isReturning() { return readLocal<boolean>(SEEN_KEY, false) === true; }
+function isKnownAccount(email: string) { const norm = email.trim().toLowerCase(); return !!norm && readLocal<string[]>(ACCOUNTS_KEY, []).includes(norm); }
+
+
 
 function AegisApp() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
@@ -37,13 +59,14 @@ function AegisApp() {
   const garden = useGarden(signedIn ? "live" : demo ? "demo" : "off");
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setSignedIn(Boolean(data.user)));
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN") setSignedIn(true);
+    supabase.auth.getUser().then(({ data }) => { if (data.user) markReturning(data.user.email ?? ""); setSignedIn(Boolean(data.user)); });
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN") { markReturning(session?.user?.email ?? ""); setSignedIn(true); }
       if (event === "SIGNED_OUT") setSignedIn(false);
     });
     return () => data.subscription.unsubscribe();
   }, []);
+
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -57,16 +80,18 @@ function AegisApp() {
       setMessage(error ? error.message : "Check your email for a secure reset link.");
     } else if (mode === "signup") {
       const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin, data: { display_name: displayName } } });
+      if (!error) markReturning(email);
       setMessage(error ? error.message : data.session ? "Account created." : "Check your email to confirm your account.");
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setMessage(error.message);
+      if (error) setMessage(error.message); else markReturning(email);
     }
+
     setBusy(false);
   }
 
   if (signedIn === null) return <div className="grid min-h-screen place-items-center bg-surface"><LoaderCircle className="animate-spin text-brand" /></div>;
-  if (!signedIn && !demo) return <AuthScreen mode={mode} setMode={setMode} message={message} busy={busy} onSubmit={handleAuth} onDemo={() => setDemo(true)} setMessage={setMessage} />;
+  if (!signedIn && !demo) return <AuthScreen mode={mode} setMode={setMode} message={message} busy={busy} onSubmit={handleAuth} onDemo={() => { markReturning(); setDemo(true); }} setMessage={setMessage} />;
 
   const signOut = async () => { if (demo) { setDemo(false); setView("home"); return; } await supabase.auth.signOut(); setView("home"); };
   return <AppShell view={view} setView={setView} avatarUrl={avatarUrl} onSignOut={signOut}>
@@ -79,7 +104,12 @@ function AegisApp() {
 }
 
 function AuthScreen({ mode, setMode, message, busy, onSubmit, onDemo, setMessage }: { setMessage: (m: string) => void; mode: AuthMode; setMode: (m: AuthMode) => void; message: string; busy: boolean; onSubmit: (e: FormEvent<HTMLFormElement>) => void; onDemo: () => void }) {
-  const title = mode === "signup" ? "Create your garden" : mode === "forgot" ? "Reset your password" : "Welcome back";
+  const [seen, setSeen] = useState(false);
+  const [email, setEmail] = useState("");
+  useEffect(() => { setSeen(isReturning()); }, []);
+  const returning = seen || isKnownAccount(email);
+  const title = mode === "signup" ? "Create your garden" : mode === "forgot" ? "Reset your password" : returning ? "Welcome back" : "Welcome";
+
   return <main className="min-h-screen bg-surface px-5 py-8"><div className="mx-auto max-w-md">
     <div className="mb-10 flex items-center gap-2"><span className="grid size-9 place-items-center rounded-xl bg-brand text-brand-foreground"><Leaf size={18}/></span><div><p className="font-display text-xs font-bold uppercase tracking-[0.22em] text-brand/50">Aegis Agria</p><p className="font-display text-lg font-extrabold leading-none">Plant Intelligence</p></div></div>
     <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -87,7 +117,7 @@ function AuthScreen({ mode, setMode, message, busy, onSubmit, onDemo, setMessage
       <p className="mt-2 text-sm text-muted-foreground">{mode === "forgot" ? "We’ll send a secure link to your inbox." : "Health insights and care schedules for every plant."}</p>
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
         {mode === "signup" && <label className="block text-sm font-semibold">Name<Input name="name" required className="mt-1.5" placeholder="Your name" /></label>}
-        <label className="block text-sm font-semibold">Email<Input name="email" required type="email" className="mt-1.5" placeholder="you@example.com" /></label>
+        <label className="block text-sm font-semibold">Email<Input name="email" required type="email" className="mt-1.5" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
         {mode !== "forgot" && <label className="block text-sm font-semibold">Password<Input name="password" required minLength={8} type="password" className="mt-1.5" placeholder="At least 8 characters" /></label>}
         {mode === "login" && <button type="button" onClick={() => setMode("forgot")} className="text-sm font-semibold text-brand/70">Forgot password?</button>}
         <Button size="lg" className="w-full" disabled={busy}>{busy && <LoaderCircle className="animate-spin" />}{mode === "signup" ? "Create account" : mode === "forgot" ? "Send reset link" : "Sign in"}</Button>
